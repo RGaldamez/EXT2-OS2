@@ -5,33 +5,51 @@
  */
 package ext2.os2;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+
 /**
  *
- * @author juany
+ * @author juany, inti, ricardo, ariel
  */
 public class Inode {
-    int i_size;
-    char[] i_ctime;
-    char[] i_blocks;
-    int[] i_block;
-    /*
-    4   2   8   60
     
-    */
-    public Inode() {
-        this.i_size = 0;
-        this.i_ctime = new char[19];//2016/11/16 12:08:43
-        this.i_blocks = new char[4];
-        this.i_block = new int[15];
-    }
+    int i_size;
+    String i_atime;
+    String i_mtime;
+    String i_dtime;
+    String i_ctime;
+    int i_links_count;
+    int i_blocks;
+    int[] i_block;
 
-    public Inode(int i_size, char[] i_ctime, char[] i_blocks, int[] i_block) {
+    public Inode(int i_size, String i_atime, String i_mtime, String i_dtime, String i_ctime, int i_links_count, int i_blocks, int[] i_block) {
         this.i_size = i_size;
+        this.i_atime = i_atime;
+        this.i_mtime = i_mtime;
+        this.i_dtime = i_dtime;
         this.i_ctime = i_ctime;
+        this.i_links_count = i_links_count;
         this.i_blocks = i_blocks;
         this.i_block = i_block;
     }
-
+    
+    public Inode(){
+        this.i_size = 0;
+        this.i_links_count = 0;
+        this.i_blocks = 0;
+        this.i_block = new int[13];
+        DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
+        Date fecha = Calendar.getInstance().getTime();
+        
+        this.i_ctime = df.format(fecha);
+        this.i_atime = "";
+        this.i_mtime = "";
+        this.i_dtime = "";
+        
+    }
 
     public int getI_size() {
         return i_size;
@@ -40,28 +58,60 @@ public class Inode {
     public void setI_size(int i_size) {
         this.i_size = i_size;
     }
-    
-    public char[] getI_ctime() {
+
+    public String getI_atime() {
+        return i_atime;
+    }
+
+    public void setI_atime(String i_atime) {
+        this.i_atime = i_atime;
+    }
+
+    public String getI_mtime() {
+        return i_mtime;
+    }
+
+    public void setI_mtime(String i_mtime) {
+        this.i_mtime = i_mtime;
+    }
+
+    public String getI_dtime() {
+        return i_dtime;
+    }
+
+    public void setI_dtime(String i_dtime) {
+        this.i_dtime = i_dtime;
+    }
+
+    public String getI_ctime() {
         return i_ctime;
     }
 
-    public void setI_ctime(char[] i_ctime) {
+    public void setI_ctime(String i_ctime) {
         this.i_ctime = i_ctime;
     }
-    
-    public char[] getI_blocks() {
+
+    public int getI_links_count() {
+        return i_links_count;
+    }
+
+    public void setI_links_count(int i_links_count) {
+        this.i_links_count = i_links_count;
+    }
+
+    public int getI_blocks() {
         return i_blocks;
     }
 
-    public void setI_blocks(char[] i_blocks) {
+    public void setI_blocks(int i_blocks) {
         this.i_blocks = i_blocks;
     }
 
-    public int[] getBlock() {
+    public int[] getI_block() {
         return i_block;
     }
 
-    public void setBlock(int[] i_block) {
+    public void setI_block(int[] i_block) {
         this.i_block = i_block;
     }
     

@@ -10,6 +10,7 @@ package ext2.os2;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.util.ArrayList;
 
 //import java.io.FileOutputStream;
 //import java.io.IOException;
@@ -20,51 +21,116 @@ import java.io.RandomAccessFile;
 
 /**
  *
- * @author ricar
+ * @author ricardo, juany, inti, ariel
  */
 public class EXT2OS2 {
 
     /**
      * @param args the command line arguments
      */
+    public static int offset_bitmapdatos = 0;
+    public static int offset_bitmapinodos = 8192;
+    public static int offset_tablainodos = 12288;
+    public static int offset_iniciodatos = 143360;
+    public static int clusterSize = 4096;
+    public static int fileClusters = 65536;
+
+    public static RandomAccessFile fileSystem;
+
     public static void main(String[] args) {
-        File file = new File("./fileSystem");
-        if (!file.exists()) {
-            try {
-                RandomAccessFile fileSystem = new RandomAccessFile("fileSystem","rw");
-                
-                byte initial = 0;
-                char division = '|';
-                
-                int fileClusters = 65536;
-                int clusterSize = 4096;
-                
+        try {
+            File file = new File("./fileSystem");
+            fileSystem =  new RandomAccessFile("fileSystem","rw");
+            if (!file.exists()) {
                 for (int i = 0; i < fileClusters ; i++) {
-                    
                     for (int j = 0; j < clusterSize; j++) {
-                        fileSystem.writeByte(initial);
+                        fileSystem.writeByte(0);
                     }
-                    fileSystem.writeChar(division);
                 }
-                
-            } catch (IOException ioex) {
+            }else{
+                fileSystem.seek(0);
+                for (int i = 0; i < 4; i++) {
+                    if(i == 4) {
+                        fileSystem.writeByte(170);
+                    }else{
+                        fileSystem.writeByte(255);
+                    }
+                }
+            }
+            
+        } catch (IOException ioex) {
                 System.err.println("Error creando Sistema");
+        }
+}
+    
+public int[] buscarInodoVacio() throws IOException {
+    fileSystem.seek(offset_bitmapinodos);
+    for(int i = 0; i < 128; i++){
+        byte currByte = fileSystem.readByte();
+        if(currByte < 127){
+            for (int j = 7; j >= 0; j--) {
+                if(((currByte >> j) & 0) == 0){
+                    fileSystem.seek(offset_bitmapinodos + i);
+                    currByte |= (1 << j);
+                    fileSystem.writeByte(currByte);
+                    int[] retVal = {i, j};
+                    return retVal;
+                }
             }
         }
-            
-        
-        
-       
-        
-            
-        
-        
-                
-        
-        
-
-    
+    }
+    int[] fallo = {-1, -1};
+    return fallo;
 }
+
+public void buscarBloquesVacios(String data) throws IOException{
+    int blockQuantity = (int) Math.ceil((data.length()*2)/4096); //cantidad de bloques necesarios para escribir la data
+    fileSystem.seek(offset_bitmapdatos);
+    ArrayList<int[]> blocks = new ArrayList(); 
+    for (int i = 4; i < offset_bitmapinodos; i++) {
+        byte currByte = fileSystem.readByte();
+        for (int j = 7; j >= 0; j++) {
+            if(((currByte >> j) & 0) == 0){
+                int[] vals = {i, j};
+                blocks.add(vals);
+            }
+        }
+        if(blocks.size() == blockQuantity){
+            break;
+        }
+    }
+    if(blocks.size() < blockQuantity){
+        System.err.println("no hay suficientes bloques");
+    }else{
+        for (int i = 0; i < blocks.size(); i++) {
+            fileSystem.seek(blocks.get(i)[0]);
+            byte curr = fileSystem.readByte();
+            curr |= (1 << blocks.get(i)[1]);
+            fileSystem.seek(blocks.get(i)[0]);
+            fileSystem.writeByte(curr);
+        }
+
+        asignarInodo(blocks, data.length()*2);
+//        escribirData(data);
+    }
+}
+
+public void asignarInodo(ArrayList<int[]> blocks, int size) throws IOException {
+    int[] index = buscarInodoVacio();
+    System.out.println(index);
+
+    if(index[0] != -1){
+        int posicion = ((index[0]*8)+index[1])*128+offset_tablainodos; //Posicion del inodo en la tabla de inodos
+        fileSystem.seek(posicion);
+        Inode inodo = new Inode();
+        inodo.setI_blocks(blocks.size());
+        inodo.setI_size(size);
+//        if(size <= 12*clusterSize)
+
+    }
+}
+    
+
 
 
 
