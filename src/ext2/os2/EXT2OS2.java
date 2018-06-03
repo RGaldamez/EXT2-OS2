@@ -49,7 +49,7 @@ public class EXT2OS2 {
                 }
             }else{
                 fileSystem.seek(0);
-                for (int i = 0; i < 4; i++) {
+                for (int i = 0; i < 5; i++) {
                     if(i == 4) {
                         fileSystem.writeByte(170);
                     }else{
@@ -57,7 +57,6 @@ public class EXT2OS2 {
                     }
                 }
             }
-            
         } catch (IOException ioex) {
                 System.err.println("Error creando Sistema");
         }
@@ -111,25 +110,56 @@ public void buscarBloquesVacios(String data) throws IOException{
         }
 
         asignarInodo(blocks, data.length()*2);
-//        escribirData(data);
+        escribirData(blocks, data);
     }
 }
 
 public void asignarInodo(ArrayList<int[]> blocks, int size) throws IOException {
     int[] index = buscarInodoVacio();
-    System.out.println(index);
-
     if(index[0] != -1){
         int posicion = ((index[0]*8)+index[1])*128+offset_tablainodos; //Posicion del inodo en la tabla de inodos
         fileSystem.seek(posicion);
         Inode inodo = new Inode();
         inodo.setI_blocks(blocks.size());
         inodo.setI_size(size);
-//        if(size <= 12*clusterSize)
-
+        int[] punteros = new int[blocks.size()];
+        for(int i = 0; i< blocks.size(); i++) {
+            punteros[i] = (index[0]*8+index[1])*clusterSize;
+        }
+        inodo.setI_block(punteros);
+        //Escritura del Inodo en la tabla de inodos
+        //size, links_count, blocks, punteros, create, access, modify, delete
+        fileSystem.writeInt(size);
+        fileSystem.writeInt(1);
+        fileSystem.writeInt(blocks.size());
+        for (int i = 0; i < 13; i++) {
+            if(i < punteros.length){
+                fileSystem.writeInt(punteros[i]);
+            }else{
+                fileSystem.writeInt(0);
+            }
+        }
+        fileSystem.writeUTF(inodo.getI_ctime());
+        fileSystem.writeUTF(inodo.getI_atime());
+        fileSystem.writeUTF(inodo.getI_mtime());
+        fileSystem.writeUTF(inodo.getI_dtime());
     }
 }
     
+public void escribirData(ArrayList<int[]> blocks, String data) throws IOException{
+    int posicion;
+    for (int i = 0; i < blocks.size(); i++) {
+        posicion = (blocks.get(i)[0]*8+blocks.get(i)[1])*4096;
+        fileSystem.seek(posicion);
+        if(data.length() >= 2047){
+            String output = data.substring(0, 2047);
+            data = data.substring(2047, data.length());
+            fileSystem.writeUTF(output);
+        }else{
+            fileSystem.writeUTF(data);
+        }
+    }
+}
 
 
 

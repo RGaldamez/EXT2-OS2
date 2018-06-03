@@ -15,16 +15,16 @@ import java.util.Date;
  * @author juany, inti, ricardo, ariel
  */
 public class Inode {
-    
+
     int i_size;
-    String i_atime;
-    String i_mtime;
-    String i_dtime;
-    String i_ctime;
     int i_links_count;
     int i_blocks;
     int[] i_block;
-
+    String i_ctime;
+    String i_atime;
+    String i_mtime;
+    String i_dtime;
+    
     public Inode(int i_size, String i_atime, String i_mtime, String i_dtime, String i_ctime, int i_links_count, int i_blocks, int[] i_block) {
         this.i_size = i_size;
         this.i_atime = i_atime;
@@ -41,14 +41,13 @@ public class Inode {
         this.i_links_count = 0;
         this.i_blocks = 0;
         this.i_block = new int[13];
-        DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
-        Date fecha = Calendar.getInstance().getTime();
         
+        DateFormat df = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        Date fecha = Calendar.getInstance().getTime();
         this.i_ctime = df.format(fecha);
         this.i_atime = "";
         this.i_mtime = "";
-        this.i_dtime = "";
-        
+        this.i_dtime = ""; 
     }
 
     public int getI_size() {
