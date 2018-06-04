@@ -124,23 +124,30 @@ public class EXT2OS2 {
         }
     }
     
-    public static void buscarBloquesVaciosFile(String data, String fileName) throws IOException {
+    public static int buscarBloquesVaciosFile(String data, String fileName) throws IOException {
         int blockQuantity = (int) Math.ceil((data.length()) / 4096); //cantidad de bloques necesarios para escribir la data
+        blockQuantity += 1;
         fileSystem.seek(offset_bitmapdatos);
-        ArrayList<int[]> blocks = new ArrayList();            
-        for (int i = 4; i < offset_bitmapinodos; i++) {
+        ArrayList<int[]> blocks = new ArrayList();  
+        System.out.println("Comenzó a buscar en bitmap datos");
+        for (int i = 0; i < offset_bitmapinodos; i++) {
             byte currByte = fileSystem.readByte();
-            for (int j = 7; j >= 0; j++) {
-                if (((currByte >> j) & 0) == 0) {
+            for (int j = 7; j >= 0; j--) {
+                
+                if (((currByte >> j)) == 0) {
                     int[] vals = {i, j};
                     blocks.add(vals);
+                    if (blocks.size() == blockQuantity) {
+                        i = offset_bitmapinodos;
+                        break;
+                    }
                 }
-            }
-            if (blocks.size() == blockQuantity) {
-                break;
+                
             }
             
+            
         }
+        System.out.println("Termino de buscar bloques");
         if (blocks.size() < blockQuantity) {
             System.err.println("no hay suficientes bloques");
         } else {
@@ -151,10 +158,14 @@ public class EXT2OS2 {
                 fileSystem.seek(blocks.get(i)[0]);
                 fileSystem.writeByte(curr);
             }
+            System.out.println("Terminó de reescribir bits en bitmap datos");
             int inodeForDir = asignarInodo(blocks, data.getBytes("UTF-8").length);
             escribirEntradaDirectorio(blocks, fileName, inodeForDir);
-            escribirData(blocks, data);                                 //AGREGUE ESTO REVISEN SI ESTA BIEN [@Inti @Ricardo] -JUANY
+            escribirData(blocks, data);
+            return inodeForDir;
+//            escribirData(blocks, data);                                 //AGREGUE ESTO REVISEN SI ESTA BIEN [@Inti @Ricardo] -JUANY
         }
+        return -1;
     }
     
     public static int asignarInodo(ArrayList<int[]> blocks, int size) {
@@ -226,17 +237,24 @@ public class EXT2OS2 {
     
     public static void escribirData(ArrayList<int[]> blocks, String data) throws IOException {
         int posicion;
+        System.out.println("blocks size: " +blocks.size());
         for (int i = 0; i < blocks.size(); i++) {
             posicion = (blocks.get(i)[0] * 8 + blocks.get(i)[1]) * 4096;
             fileSystem.seek(posicion);
-            if (data.length() >= 2047) {
-                String output = data.substring(0, 2047);
-                data = data.substring(2047, data.length());
-                fileSystem.writeUTF(output);
+            if (data.length() >= 2048) {
+                String output = data.substring(0, 2048);
+                data = data.substring(2048, data.length());
+                for (int j = 0; j < output.length(); j++) {
+                    fileSystem.writeChar(output.charAt(j));
+                }
             } else {
-                fileSystem.writeUTF(data);
+                for (int j = 0; j < data.length(); j++) {
+                    fileSystem.writeChar(data.charAt(j));
+                }
             }
         }
+        System.out.println("Terminó de escribir datos");
+
     }
     
     public static void escribirEntradaDirectorio(ArrayList<int[]> blocks, String filename, int inodo) {
@@ -321,9 +339,11 @@ public class EXT2OS2 {
         if (command[1].equals(">")) {
             Scanner scanner = new Scanner(System.in);
             String text = "";
-            while(!text.equals("::q")){
+            String linea = "";
+            System.out.print(">");
+            while(!(linea = scanner.nextLine()).equals("::q")){
                 System.out.print(">");
-                text+= scanner.nextLine()+"\n";
+                text+= linea+"\n";
             }
             buscarBloquesVaciosFile(text, command[2]);
             //Escribe el texto que se le agregue hasta encontrar ::q
@@ -331,7 +351,55 @@ public class EXT2OS2 {
             //--Escribir los datos del archivo
             System.out.println(command[0] + " " + command[1] + " " + command[2]);
         } else {
-            
+            fileSystem.seek(directorioCd.peek());
+            int reclen;
+            String names = "";
+            while(true) {
+                reclen = fileSystem.readInt();
+                if(reclen == 0){
+                    break;
+                }else{
+                    int inodo = fileSystem.readInt();
+                    int l = fileSystem.readInt();
+                    String name = "";
+                    for (int i = 0; i < l; i++) {
+                        name += fileSystem.readChar();
+                    }
+                    if(name.equals(command[1])){
+                        fileSystem.seek(inodo);
+                        fileSystem.readInt();
+                        int size = fileSystem.readInt();
+                        fileSystem.readInt();
+                        int blocks = fileSystem.readInt();
+                        long currDir = fileSystem.getFilePointer();
+                        String text = "";
+                        for (int i = 0; i < blocks; i++) {
+                            int ptr = fileSystem.readInt();
+                            currDir += 4;
+                            fileSystem.seek(ptr);
+                            for (int j = 0; j < 10; j++) {
+                                if(size > 4096){
+                                    for (int k = 0; k < 4096; k++) {
+                                        text += fileSystem.readChar();
+                                    }
+                                    size-=4096;
+                                }else{
+                                    for (int k = 0; k < size; k++) {
+                                        text+= fileSystem.readChar();
+                                    }
+                                    size = 0;
+                                }
+                                
+                                fileSystem.seek(currDir);
+                            }
+                        }
+                        fileSystem.seek(directorioCd.peek());
+                        System.out.println(text);
+                        
+                    }
+                }
+
+        }
             //imprime el contenido de un archivo
             //--Entra al inodo del archivo y retorna lo que hay en los bloques del inodo
             System.out.println(command[0] + " " + command[1]);
