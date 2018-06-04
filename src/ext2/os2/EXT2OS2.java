@@ -131,7 +131,7 @@ public class EXT2OS2 {
             holis |= (1 << vals[1]);
             fileSystem.seek(vals[0]);
             fileSystem.writeByte(holis);
-            asignarInodo(blocks, 0);
+            int inodeForDir = asignarInodo(blocks, 0);
             escribirData(blocks, data);
         } else {
             int blockQuantity = (int) Math.ceil((data.length() * 2) / 4096); //cantidad de bloques necesarios para escribir la data
@@ -164,11 +164,11 @@ public class EXT2OS2 {
         }
     }
     
-    public static void asignarInodo(ArrayList<int[]> blocks, int size) throws IOException {
+    public static int asignarInodo(ArrayList<int[]> blocks, int size) throws IOException {
         if (size == 0) {
             int[] index = buscarInodoVacio();
             if (index[0] != -1) {
-                int posicion = ((index[0] * 8) + index[1]) * 4096 + offset_iniciodatos; //Posicion del inodo en la tabla de inodos
+                int posicion = ((index[0] * 8) + index[1]) * 128 + offset_tablainodos;; //Posicion del inodo en la tabla de inodos
                 fileSystem.seek(posicion);
                 Inode inodo = new Inode();
                 inodo.setI_size(0);
@@ -184,6 +184,7 @@ public class EXT2OS2 {
                 fileSystem.writeUTF(inodo.getI_atime());
                 fileSystem.writeUTF(inodo.getI_mtime());
                 fileSystem.writeUTF(inodo.getI_dtime());
+                return posicion;
             }
         } else {
             int[] index = buscarInodoVacio();
@@ -215,8 +216,11 @@ public class EXT2OS2 {
                 fileSystem.writeUTF(inodo.getI_atime());
                 fileSystem.writeUTF(inodo.getI_mtime());
                 fileSystem.writeUTF(inodo.getI_dtime());
+                
+                return posicion;
             }
         }
+        return -1;
     }
     
     public static void escribirData(ArrayList<int[]> blocks, String data) throws IOException {
@@ -236,16 +240,41 @@ public class EXT2OS2 {
     }
     
     
-    public static void escribirDirectorio(ArrayList<int[]> blocks, String data) throws IOException {
+    public static void escribirEntradaDirectorio(ArrayList<int[]> blocks, String data, int inodo) throws IOException {
         int posicion;
         //Entrada de directorio
-        //index inodo, tamaño del nombre, nombre, tamaño
+        //index inodo, tamaño del nombre, nombre 
         posicion = directoriosCd.get(directoriosCd.size()-1);
         fileSystem.seek(posicion);       
+        //64Bytes total
+        //int inodo
         int num;
+        int rec_len =  16+data.length()*2;
         for (int i = 0; i < 4096; i++) {
             num = fileSystem.readInt();
-            if(num != 0){
+            if(num == 0){
+                fileSystem.seek(fileSystem.getFilePointer()-4);
+                fileSystem.writeInt(rec_len);
+                fileSystem.writeInt(inodo);
+                fileSystem.writeInt(data.length()*2);
+                fileSystem.writeUTF(data);
+            }else{
+                fileSystem.seek(fileSystem.getFilePointer()-4);
+                while(true){
+                    
+                    int size = fileSystem.readInt();
+                    if ( fileSystem.readInt()== 0  ){
+                        fileSystem.writeInt(inodo);
+                        fileSystem.writeInt(rec_len);
+                        fileSystem.writeInt(data.length()*2);
+                        fileSystem.writeUTF(data);
+                        break;
+                    }else{
+                        fileSystem.seek(fileSystem.getFilePointer() + size - 4);
+                    }
+                }
+                
+                
                 
             }
         }
