@@ -11,13 +11,8 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.Scanner;
+import java.util.Stack;
 
-//import java.io.FileOutputStream;
-//import java.io.IOException;
-//import java.text.DateFormat;
-//import java.text.SimpleDateFormat;
-//import java.util.Date;
-//import java.util.Scanner;
 /**
  *
  * @author ricardo, juany, inti, ariel
@@ -33,41 +28,35 @@ public class EXT2OS2 {
     public static int offset_iniciodatos = 143360;
     public static int clusterSize = 4096;
     public static int fileClusters = 65536;
-    public static ArrayList<Integer> directoriosCd = new ArrayList();    
-    
+    public static Stack<Integer> directorioCd = new Stack();    
+    public static String route = "/";
     public static RandomAccessFile fileSystem;
     
     public static void main(String[] args) {
-        directoriosCd.add(offset_iniciodatos);
+        
+        directorioCd.push(offset_iniciodatos);
         try {
-            File file = new File("./fileSystem");
             fileSystem = new RandomAccessFile("fileSystem", "rw");
-            if (!file.exists()) {
-                for (int i = 0; i < fileClusters; i++) {
-                    for (int j = 0; j < clusterSize; j++) {
-                        fileSystem.writeByte(0);
-                    }
-                }
-            } else {
-                fileSystem.seek(0);
-                for (int i = 0; i < 5; i++) {
-                    if (i == 4) {
-                        fileSystem.writeByte(170);
-                    } else {
-                        fileSystem.writeByte(255);
-                    }
+//            fileSystem.seek(directorioCd.peek());
+            fileSystem.seek(0);
+            for (int i = 0; i < 5; i++) {
+                if (i == 4) {
+                    fileSystem.writeByte(240);
+                } else {
+                    fileSystem.writeByte(255);
                 }
             }
+            fileSystem.seek(directorioCd.peek());
             Scanner scanner = new Scanner(System.in);
             boolean read = true;
             while (read) {
-                System.out.print(">>");
+                System.out.print(route+" >>");
                 String command = scanner.nextLine();
                 String[] partes = command.split(" ");
                 if (partes[0].equals("cat")) {
                     cat(partes);
                 } else if (partes[0].equals("ls")) {
-                    ls(partes);
+                    ls();
                 } else if (partes[0].equals("mkdir")) {
                     mkdir(partes);
                 } else if (partes[0].equals("rmdir")) {
@@ -88,10 +77,11 @@ public class EXT2OS2 {
     public static int[] buscarInodoVacio() throws IOException {
         fileSystem.seek(offset_bitmapinodos);
         for (int i = 0; i < 128; i++) {
-            byte currByte = fileSystem.readByte();
-            if (currByte < 127) {
+            byte currByte = (byte)fileSystem.readUnsignedByte();
+            
+            if (currByte < 255) {
                 for (int j = 7; j >= 0; j--) {
-                    if (((currByte >> j) & 0) == 0) {
+                    if (((currByte >> j)) == 0) {
                         fileSystem.seek(offset_bitmapinodos + i);
                         currByte |= (1 << j);
                         fileSystem.writeByte(currByte);
@@ -105,33 +95,37 @@ public class EXT2OS2 {
         return fallo;
     }
     
-    public static void buscarBloquesVaciosDir(String data) throws IOException{
-        fileSystem.seek(offset_bitmapdatos);
-        ArrayList<int[]> blocks = new ArrayList();            
-        int[] vals = new int[2];
-        for (int i = 4; i < offset_bitmapinodos; i++) {
-            byte currByte = fileSystem.readByte();
-            for (int j = 7; j >= 0; j++) {
-                if (((currByte >> j) & 0) == 0) {
-                    vals[0] = i;
-                    vals[1] = j;
-                    i = offset_bitmapinodos;
-                    blocks.add(vals);
-                    break;
+    public static void buscarBloquesVaciosDir(String data){
+        try{
+            fileSystem.seek(offset_bitmapdatos);
+            ArrayList<int[]> blocks = new ArrayList();            
+            int[] vals = new int[2];
+            for (int i = 0; i < offset_bitmapinodos; i++) {
+                byte currByte = fileSystem.readByte();
+                for (int j = 7; j >= 0; j++) {
+                    if (((currByte >> j) & 0) == 0) {
+                        vals[0] = i;
+                        vals[1] = j;
+                        i = offset_bitmapinodos;
+                        blocks.add(vals);
+                        break;
+                    }
                 }
             }
+            fileSystem.seek(vals[0]);
+            byte holis = (byte) fileSystem.readUnsignedByte();
+            holis |= (1 << vals[1]);
+            fileSystem.seek(vals[0]);
+            fileSystem.writeByte(holis);
+            int inodeForDir = asignarInodo(blocks, 0);
+            escribirEntradaDirectorio(blocks, data, inodeForDir);
+        }catch(IOException ioex){
+            System.out.println("Error en buscar bloques vacios dir");
         }
-        fileSystem.seek(vals[0]);
-        byte holis = (byte) fileSystem.readUnsignedByte();
-        holis |= (1 << vals[1]);
-        fileSystem.seek(vals[0]);
-        fileSystem.writeByte(holis);
-        int inodeForDir = asignarInodo(blocks, 0);
-        escribirEntradaDirectorio(blocks, "", inodeForDir);
     }
     
     public static void buscarBloquesVaciosFile(String data, String fileName) throws IOException {
-        int blockQuantity = (int) Math.ceil((data.length() * 2) / 4096); //cantidad de bloques necesarios para escribir la data
+        int blockQuantity = (int) Math.ceil((data.length()) / 4096); //cantidad de bloques necesarios para escribir la data
         fileSystem.seek(offset_bitmapdatos);
         ArrayList<int[]> blocks = new ArrayList();            
         for (int i = 4; i < offset_bitmapinodos; i++) {
@@ -145,6 +139,7 @@ public class EXT2OS2 {
             if (blocks.size() == blockQuantity) {
                 break;
             }
+            
         }
         if (blocks.size() < blockQuantity) {
             System.err.println("no hay suficientes bloques");
@@ -156,17 +151,19 @@ public class EXT2OS2 {
                 fileSystem.seek(blocks.get(i)[0]);
                 fileSystem.writeByte(curr);
             }
-            int inodeForDir = asignarInodo(blocks, data.length() * 2);
+            int inodeForDir = asignarInodo(blocks, data.getBytes("UTF-8").length);
             escribirEntradaDirectorio(blocks, fileName, inodeForDir);
             escribirData(blocks, data);                                 //AGREGUE ESTO REVISEN SI ESTA BIEN [@Inti @Ricardo] -JUANY
         }
     }
     
-    public static int asignarInodo(ArrayList<int[]> blocks, int size) throws IOException {
+    public static int asignarInodo(ArrayList<int[]> blocks, int size) {
+        try{
         if (size == 0) {
             int[] index = buscarInodoVacio();
             if (index[0] != -1) {
-                int posicion = ((index[0] * 8) + index[1]) * 128 + offset_tablainodos;; //Posicion del inodo en la tabla de inodos
+                int posicion = ((index[0] * 8) + (7-index[1])) * 128 + offset_tablainodos;; //Posicion del inodo en la tabla de inodos
+                System.out.println("Posicion de inodo: "+posicion);
                 fileSystem.seek(posicion);
                 Inode inodo = new Inode();
                 inodo.setI_size(0);
@@ -175,7 +172,9 @@ public class EXT2OS2 {
                 fileSystem.writeInt(0);
                 fileSystem.writeInt(size);                
                 fileSystem.writeInt(0);
-                for (int i = 0; i < 13; i++) {
+                fileSystem.writeInt(1);
+                fileSystem.writeInt((blocks.get(0)[0]*8+blocks.get(0)[1])*clusterSize);
+                for (int i = 1; i < 13; i++) {
                     fileSystem.writeInt(0);
                 }
                 fileSystem.writeUTF(inodo.getI_ctime());
@@ -187,7 +186,8 @@ public class EXT2OS2 {
         } else {
             int[] index = buscarInodoVacio();
             if (index[0] != -1) {
-                int posicion = ((index[0] * 8) + index[1]) * 128 + offset_tablainodos; //Posicion del inodo en la tabla de inodos
+                
+                int posicion = ((index[0] * 8) + (7-index[1])) * 128 + offset_tablainodos; //Posicion del inodo en la tabla de inodos
                 fileSystem.seek(posicion);
                 Inode inodo = new Inode();
                 inodo.setI_blocks(blocks.size());
@@ -218,6 +218,9 @@ public class EXT2OS2 {
                 return posicion;
             }
         }
+        }catch(IOException ioex){
+            System.out.println("Error en asignar inodo");
+        }
         return -1;
     }
     
@@ -234,47 +237,83 @@ public class EXT2OS2 {
                 fileSystem.writeUTF(data);
             }
         }
-
     }
     
-    
-    public static void escribirEntradaDirectorio(ArrayList<int[]> blocks, String data, int inodo) throws IOException {
-        int posicion;
-        //Entrada de directorio
-        //index inodo, tamaño del nombre, nombre 
-        posicion = directoriosCd.get(directoriosCd.size()-1);
-        fileSystem.seek(posicion);       
-        //64Bytes total
-        //int inodo
-        int num;
-        int rec_len =  16+data.length()*2;
-        for (int i = 0; i < 4096; i++) {
-            num = fileSystem.readInt();
-            if(num == 0){
-                fileSystem.seek(fileSystem.getFilePointer()-4);
-                fileSystem.writeInt(rec_len);
-                fileSystem.writeInt(inodo);
-                fileSystem.writeInt(data.length()*2);
-                fileSystem.writeUTF(data);
-            }else{
-                fileSystem.seek(fileSystem.getFilePointer()-4);
-                while(true){
+    public static void escribirEntradaDirectorio(ArrayList<int[]> blocks, String filename, int inodo) {
+        try{
+            int posicion;
+            //Entrada de directorio
+            //index inodo, tamaño del nombre, nombre 
+            posicion = directorioCd.peek();
+            fileSystem.seek(posicion);       
+            //64Bytes total
+            //int inodo
+            int inode, reclen;
+            int rec_len =  12+filename.getBytes("UTF-8").length;
+            int direntries = 0;
+            while(true){
+                if(direntries < 4096){
+                    reclen = fileSystem.readInt();
+                    inode = fileSystem.readInt();
                     
-                    int size = fileSystem.readInt();
-                    if ( fileSystem.readInt()== 0  ){
-                        fileSystem.writeInt(inodo);
+                    if(reclen == 0){
+                        fileSystem.seek(fileSystem.getFilePointer() - 8);
                         fileSystem.writeInt(rec_len);
-                        fileSystem.writeInt(data.length()*2);
-                        fileSystem.writeUTF(data);
+
+                        fileSystem.writeInt(inodo);
+                        int l = filename.getBytes("UTF-8").length;
+                        fileSystem.writeInt(l);
+                        fileSystem.writeChars(filename);
                         break;
                     }else{
-                        fileSystem.seek(fileSystem.getFilePointer() + size - 4);
+//                        System.out.println("RECLEN: "+reclen);
+                        direntries += reclen;
+                        int length = fileSystem.readInt();
+                        for (int i = 0; i < length; i++) {
+                            fileSystem.readChar();
+                        }
+//                        fileSystem.seek(fileSystem.getFilePointer() + reclen - 8);
+                        
                     }
+                }else{
+                    System.out.println("Ya no hay espacio para entradas de directorios en este directorio");
+                    break;
                 }
-                
-                
-                
             }
+//        for (int i = 0; i < 4096; i++) {
+//            num = fileSystem.readInt();
+//            if(num == 0){
+//                fileSystem.seek(fileSystem.getFilePointer()-4);
+//                fileSystem.writeInt(rec_len);
+//                fileSystem.writeInt(inodo);
+//                fileSystem.writeInt(data.length()*2);
+//                fileSystem.writeUTF(data);
+//            }else{
+//                fileSystem.seek(fileSystem.getFilePointer()-4);
+//                while(true){
+//                    
+//                    int size = fileSystem.readInt();
+//                    System.out.println("Size: "+size);
+//                    int inode = fileSystem.readInt();
+//                    System.out.println("Inodo: "+inode);
+//                    if ( inode == 0  ){
+//                        fileSystem.seek(fileSystem.getFilePointer() - 8);
+//                        fileSystem.writeInt(rec_len);
+//                        fileSystem.writeInt(inodo);
+//                        fileSystem.writeInt(data.length()*2);
+//                        fileSystem.writeUTF(data);
+//                        i = 4096;
+//                        break;
+//                    }else{
+//                        fileSystem.readInt();
+//                        fileSystem.readUTF();
+//                    }
+//                }
+//            }
+//        }
+        }catch(IOException ioex){
+            System.out.println("Error en escribir entrada dir");
+            ioex.printStackTrace();
         }
     }
     
@@ -292,17 +331,42 @@ public class EXT2OS2 {
             //--Escribir los datos del archivo
             System.out.println(command[0] + " " + command[1] + " " + command[2]);
         } else {
+            
             //imprime el contenido de un archivo
             //--Entra al inodo del archivo y retorna lo que hay en los bloques del inodo
             System.out.println(command[0] + " " + command[1]);
         }
     }
     
-    public static void ls(String[] command) {
+    public static void ls(){
         //Imprime los directorios y archivos
         //-- imprime el contenido los datos de la entrada de directorio
         //-- -l busca la metadata con el indice del inodo
-        System.out.println(command[0] + " " + command[1]);
+        try{
+        fileSystem.seek(directorioCd.peek());
+        int reclen;
+        String names = "";
+        while(true) {
+            reclen = fileSystem.readInt();
+            if(reclen == 0){
+                break;
+            }else{
+                int inodo = fileSystem.readInt();
+                int l = fileSystem.readInt();
+                String name = "";
+                for (int i = 0; i < l; i++) {
+                    name += fileSystem.readChar();
+                }
+                System.out.println(name+", inodo: "+inodo);
+            }
+            
+        }
+        System.out.println(names);
+        fileSystem.seek(directorioCd.peek());
+        }catch(IOException ioex){
+            System.err.println("Aqui te juiste perro");
+            ioex.printStackTrace();
+        }
     }
     
     public static void mkdir(String[] command) throws IOException {
@@ -326,8 +390,42 @@ public class EXT2OS2 {
     public static void cd(String[] command) {
         //entra a un directorio
         //revisa si el nombre ingresado es de un directorio, revisando si tiene inodo o no
-        
-        System.out.println(command[0] + " " + command[1]);
+        try{
+            if(command[1].equals("..")){
+                directorioCd.pop();
+                fileSystem.seek(directorioCd.peek());
+            }else{
+                fileSystem.seek(directorioCd.peek());
+                int reclen;
+                while(true){
+                    reclen = fileSystem.readInt();
+                    if(reclen == 0){
+                        break;
+                    }else{
+                        int inodo = fileSystem.readInt();
+                        int l = fileSystem.readInt();
+                        String name = "";
+                        for (int i = 0; i < l; i++) {
+                            name += fileSystem.readChar();
+                        }
+                        if(name.equals(command[1])){
+                            fileSystem.seek(inodo);
+                            for (int i = 0; i < 4; i++) {
+                                fileSystem.readInt();
+                            }
+                            int blockptr = fileSystem.readInt();
+                            fileSystem.seek(blockptr);
+                            directorioCd.push(blockptr);
+                            route += name +"/";
+                            break;
+                        }
+                    }
+                }
+            }
+        }catch(IOException ioex){
+            System.err.println("Error en cd");
+            ioex.printStackTrace();
+        }
     }
 
 //        String file = "./boot.start";
