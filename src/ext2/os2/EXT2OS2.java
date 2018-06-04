@@ -105,62 +105,60 @@ public class EXT2OS2 {
         return fallo;
     }
     
-    public static void crearDirectorio() throws IOException {
-        buscarBloquesVacios("");
-    }
-    
-    public static void buscarBloquesVacios(String data) throws IOException {
-        if (data.equals("")) {
-            fileSystem.seek(offset_bitmapdatos);
-            ArrayList<int[]> blocks = new ArrayList();            
-            int[] vals = new int[2];
-            for (int i = 4; i < offset_bitmapinodos; i++) {
-                byte currByte = fileSystem.readByte();
-                for (int j = 7; j >= 0; j++) {
-                    if (((currByte >> j) & 0) == 0) {
-                        vals[0] = i;
-                        vals[1] = j;
-                        i = offset_bitmapinodos;
-                        blocks.add(vals);
-                        break;
-                    }
-                }
-            }
-            fileSystem.seek(vals[0]);
-            byte holis = (byte) fileSystem.readUnsignedByte();
-            holis |= (1 << vals[1]);
-            fileSystem.seek(vals[0]);
-            fileSystem.writeByte(holis);
-            int inodeForDir = asignarInodo(blocks, 0);
-            escribirData(blocks, data);
-        } else {
-            int blockQuantity = (int) Math.ceil((data.length() * 2) / 4096); //cantidad de bloques necesarios para escribir la data
-            fileSystem.seek(offset_bitmapdatos);
-            ArrayList<int[]> blocks = new ArrayList();            
-            for (int i = 4; i < offset_bitmapinodos; i++) {
-                byte currByte = fileSystem.readByte();
-                for (int j = 7; j >= 0; j++) {
-                    if (((currByte >> j) & 0) == 0) {
-                        int[] vals = {i, j};
-                        blocks.add(vals);
-                    }
-                }
-                if (blocks.size() == blockQuantity) {
+    public static void buscarBloquesVaciosDir(String data) throws IOException{
+        fileSystem.seek(offset_bitmapdatos);
+        ArrayList<int[]> blocks = new ArrayList();            
+        int[] vals = new int[2];
+        for (int i = 4; i < offset_bitmapinodos; i++) {
+            byte currByte = fileSystem.readByte();
+            for (int j = 7; j >= 0; j++) {
+                if (((currByte >> j) & 0) == 0) {
+                    vals[0] = i;
+                    vals[1] = j;
+                    i = offset_bitmapinodos;
+                    blocks.add(vals);
                     break;
                 }
             }
-            if (blocks.size() < blockQuantity) {
-                System.err.println("no hay suficientes bloques");
-            } else {
-                for (int i = 0; i < blocks.size(); i++) {
-                    fileSystem.seek(blocks.get(i)[0]);
-                    byte curr = fileSystem.readByte();
-                    curr |= (1 << blocks.get(i)[1]);
-                    fileSystem.seek(blocks.get(i)[0]);
-                    fileSystem.writeByte(curr);
+        }
+        fileSystem.seek(vals[0]);
+        byte holis = (byte) fileSystem.readUnsignedByte();
+        holis |= (1 << vals[1]);
+        fileSystem.seek(vals[0]);
+        fileSystem.writeByte(holis);
+        int inodeForDir = asignarInodo(blocks, 0);
+        escribirEntradaDirectorio(blocks, "", inodeForDir);
+    }
+    
+    public static void buscarBloquesVaciosFile(String data, String fileName) throws IOException {
+        int blockQuantity = (int) Math.ceil((data.length() * 2) / 4096); //cantidad de bloques necesarios para escribir la data
+        fileSystem.seek(offset_bitmapdatos);
+        ArrayList<int[]> blocks = new ArrayList();            
+        for (int i = 4; i < offset_bitmapinodos; i++) {
+            byte currByte = fileSystem.readByte();
+            for (int j = 7; j >= 0; j++) {
+                if (((currByte >> j) & 0) == 0) {
+                    int[] vals = {i, j};
+                    blocks.add(vals);
                 }
-                asignarInodo(blocks, data.length() * 2);
             }
+            if (blocks.size() == blockQuantity) {
+                break;
+            }
+        }
+        if (blocks.size() < blockQuantity) {
+            System.err.println("no hay suficientes bloques");
+        } else {
+            for (int i = 0; i < blocks.size(); i++) {
+                fileSystem.seek(blocks.get(i)[0]);
+                byte curr = fileSystem.readByte();
+                curr |= (1 << blocks.get(i)[1]);
+                fileSystem.seek(blocks.get(i)[0]);
+                fileSystem.writeByte(curr);
+            }
+            int inodeForDir = asignarInodo(blocks, data.length() * 2);
+            escribirEntradaDirectorio(blocks, fileName, inodeForDir);
+            escribirData(blocks, data);                                 //AGREGUE ESTO REVISEN SI ESTA BIEN [@Inti @Ricardo] -JUANY
         }
     }
     
@@ -280,12 +278,18 @@ public class EXT2OS2 {
         }
     }
     
-    public static void cat(String[] command) {
-        
+    public static void cat(String[] command) throws IOException {
         if (command[1].equals(">")) {
+            Scanner scanner = new Scanner(System.in);
+            String text = "";
+            while(!text.equals("::q")){
+                System.out.print(">");
+                text+= scanner.nextLine()+"\n";
+            }
+            buscarBloquesVaciosFile(text, command[2]);
             //Escribe el texto que se le agregue hasta encontrar ::q
             //--Crea el nuevo archivo en la entrada de directorio
-            //--el indice del inodo es el mismo que el segundo
+            //--Escribir los datos del archivo
             System.out.println(command[0] + " " + command[1] + " " + command[2]);
         } else {
             //imprime el contenido de un archivo
@@ -298,14 +302,14 @@ public class EXT2OS2 {
         //Imprime los directorios y archivos
         //-- imprime el contenido los datos de la entrada de directorio
         //-- -l busca la metadata con el indice del inodo
-        //-- 
         System.out.println(command[0] + " " + command[1]);
     }
     
-    public static void mkdir(String[] command) {
-        //crea una nueva entrada de directorio en el primer bloque del archivo
-        //el inodo tiene que ser nulo
+    public static void mkdir(String[] command) throws IOException {
+        //crea una nueva entrada de directorio en el directorio actual
         System.out.println(command[0] + " " + command[1]);
+        buscarBloquesVaciosDir(command[1]);
+        
     }
     
     public static void rmdir(String[] command) {
