@@ -16,6 +16,7 @@ import java.util.Date;
  */
 public class Inode {
 
+    int i_mode;
     int i_size;
     int i_links_count;
     int i_blocks;
