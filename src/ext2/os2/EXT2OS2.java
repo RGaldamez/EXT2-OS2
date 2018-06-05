@@ -51,7 +51,12 @@ public class EXT2OS2 {
                 if (partes[0].equals("cat")) {
                     cat(partes);
                 } else if (partes[0].equals("ls")) {
-                    ls();
+                    if(partes.length > 1){
+                        ls(partes[1]);
+                    }else{
+                        ls("");
+                    }
+                    
                 } else if (partes[0].equals("mkdir")) {
                     mkdir(partes);
                 } else if (partes[0].equals("rmdir")) {
@@ -80,10 +85,10 @@ public class EXT2OS2 {
                 for (int j = 7; j >= 0; j--) {
                     if (((currByte >> j) & 1) == 0) {
                         fileSystem.seek(offset_bitmapinodos + i);
-                                    System.out.println("Byte antes de  << :"+ Integer.toBinaryString(currByte));
+                                    //System.out.println("Byte antes de  << :"+ Integer.toBinaryString(currByte));
 
                         currByte |= (1 << j);
-                                    System.out.println("Byte despues de  << :"+ Integer.toBinaryString(currByte));
+                                    //System.out.println("Byte despues de  << :"+ Integer.toBinaryString(currByte));
 
                         fileSystem.writeByte(currByte);
                         int[] retVal = {i, j};
@@ -366,7 +371,7 @@ public class EXT2OS2 {
         }
     }
     
-    public static void ls(){
+    public static void ls(String commando){
         //Imprime los directorios y archivos
         //-- imprime el contenido los datos de la entrada de directorio
         //-- -l busca la metadata con el indice del inodo
@@ -386,6 +391,19 @@ public class EXT2OS2 {
             }else{
                 inodo = fileSystem.readInt();
                 l = fileSystem.readInt();
+                if(commando.equals("-l")){
+                    long ptr = fileSystem.getFilePointer();
+                    fileSystem.seek(inodo);
+                    int mode = fileSystem.readInt();
+                    fileSystem.seek(ptr);
+                    if(mode == 0){
+                        System.out.print("Directorio: ");
+                    }else{
+                        System.out.print("Archivo: ");
+                    }
+                }else{
+                    
+                }
                 String name = fileSystem.readUTF();
                 System.out.println(name+", inodo: "+inodo);
             }
@@ -401,7 +419,7 @@ public class EXT2OS2 {
     
     public static void mkdir(String[] command) throws IOException {
         //crea una nueva entrada de directorio en el directorio actual
-        System.out.println(command[0] + " " + command[1]);
+        //System.out.println(command[0] + " " + command[1]);
         if(command[1].length()>255){
             System.err.println("Error el nombre del archivo no puede ser mayor que 255 caracteres.");
         }else{
@@ -411,7 +429,7 @@ public class EXT2OS2 {
     
     public static void rmdir(String[] command) {
         
-        System.out.println(command[0] + " " + command[1]);
+        //System.out.println(command[0] + " " + command[1]);
         try {
             fileSystem.seek(directorioCd.peek());
             int reclen;
@@ -447,11 +465,11 @@ public class EXT2OS2 {
                                 int inodeNextDir = fileSystem.readInt();
                                 int lengthNextDir = fileSystem.readInt();
                                 String fnNextDir = fileSystem.readUTF();
-                                System.out.println("Filename next dir: " + fnNextDir);
+                                //System.out.println("Filename next dir: " + fnNextDir);
                                 direntries.add(new directoryEntry(reclenNextDir, inodeNextDir, lengthNextDir, fnNextDir));
                             }
                         }
-                        System.out.println(direntries.get(dirToDelete-1).getInodeIndex());
+                        //System.out.println(direntries.get(dirToDelete-1).getInodeIndex());
                         fileSystem.seek(direntries.get(dirToDelete-1).getInodeIndex());
                         for (int i = 0; i < 4; i++) {
                             fileSystem.readInt();
@@ -534,7 +552,7 @@ public class EXT2OS2 {
                                 int inodeNextDir = fileSystem.readInt();
                                 int lengthNextDir = fileSystem.readInt();
                                 String fnNextDir = fileSystem.readUTF();
-                                System.out.println("Filename next dir: "+fnNextDir);
+                                //System.out.println("Filename next dir: "+fnNextDir);
                                 direntries.add(new directoryEntry(reclenNextDir, inodeNextDir, lengthNextDir, fnNextDir));
                             }
                         }
@@ -580,19 +598,14 @@ public class EXT2OS2 {
             int[] inodebmindex = new int[2];
             inodebmindex[0] = (int)Math.floor(inodeNumber/8);
             inodebmindex[1] = 7- inodeNumber%8 ;
-            System.out.println("Inodo a liberar - byte "+inodebmindex[0]+", bit "+inodebmindex[1]);
+            //System.out.println("Inodo a liberar - byte "+inodebmindex[0]+", bit "+inodebmindex[1]);
             int test = ((inodebmindex[0] * 8) + (inodebmindex[1])) * 128 + offset_tablainodos;
-            if(test == inode){
-                System.out.println("SIMON");
-            }else{
-                System.out.println("NELES");
-            }
             fileSystem.seek(offset_bitmapinodos + inodebmindex[0]);
             byte currByte = (byte) fileSystem.readUnsignedByte();
-            System.out.println("Byte antes de  << :"+ Integer.toBinaryString(currByte));
+            //System.out.println("Byte antes de  << :"+ Integer.toBinaryString(currByte));
             currByte ^= 1 << inodebmindex[1];
             
-            System.out.println("Byte despues de << :"+ Integer.toBinaryString(currByte));
+            //System.out.println("Byte despues de << :"+ Integer.toBinaryString(currByte));
             fileSystem.seek(offset_bitmapinodos + inodebmindex[0]);
             fileSystem.writeByte(currByte);
         }catch(IOException ioex){
