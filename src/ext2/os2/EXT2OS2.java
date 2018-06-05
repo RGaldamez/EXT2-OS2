@@ -35,17 +35,16 @@ public class EXT2OS2 {
     public static void main(String[] args) {
         
         directorioCd.push(offset_iniciodatos);
+        
+        byte test = 9; //00001001
+        System.out.println("Binary string: "+Integer.toBinaryString(test));
+        System.out.println("Right shift 3rd bit: "+Integer.toBinaryString((test >> 2)));
+        System.out.println("AND first and second strings: "+Integer.toBinaryString(1 & (test >> 2)));
         try {
             fileSystem = new RandomAccessFile("fileSystem", "rw");
 //            fileSystem.seek(directorioCd.peek());
-            fileSystem.seek(0);
-            for (int i = 0; i < 5; i++) {
-                if (i == 4) {
-                    fileSystem.writeByte(240);
-                } else {
-                    fileSystem.writeByte(255);
-                }
-            }
+
+            
             fileSystem.seek(directorioCd.peek());
             Scanner scanner = new Scanner(System.in);
             boolean read = true;
@@ -78,10 +77,10 @@ public class EXT2OS2 {
         fileSystem.seek(offset_bitmapinodos);
         for (int i = 0; i < 128; i++) {
             byte currByte = (byte)fileSystem.readUnsignedByte();
-            
             if (currByte < 255) {
                 for (int j = 7; j >= 0; j--) {
-                    if (((currByte >> j)) == 0) {
+                    if (((currByte >> j) & 1) == 0) {
+                        System.out.println("Agarro inodo vacio byte "+i+", bit "+j);
                         fileSystem.seek(offset_bitmapinodos + i);
                         currByte |= (1 << j);
                         fileSystem.writeByte(currByte);
@@ -101,9 +100,9 @@ public class EXT2OS2 {
             ArrayList<int[]> blocks = new ArrayList();            
             int[] vals = new int[2];
             for (int i = 0; i < offset_bitmapinodos; i++) {
-                byte currByte = fileSystem.readByte();
-                for (int j = 7; j >= 0; j++) {
-                    if (((currByte >> j) & 0) == 0) {
+                byte currByte = (byte) fileSystem.readUnsignedByte(); 
+                for (int j = 7; j >= 0; j--) {
+                    if (((currByte >> j) & 1) == 0) {
                         vals[0] = i;
                         vals[1] = j;
                         i = offset_bitmapinodos;
@@ -131,10 +130,11 @@ public class EXT2OS2 {
         ArrayList<int[]> blocks = new ArrayList();  
         System.out.println("Comenzó a buscar en bitmap datos");
         for (int i = 0; i < offset_bitmapinodos; i++) {
-            byte currByte = fileSystem.readByte();
+            byte currByte =(byte) fileSystem.readUnsignedByte();
             for (int j = 7; j >= 0; j--) {
-                
-                if (((currByte >> j)) == 0) {
+                //11110000
+                if (((currByte >> j) & 1) == 0) {
+                    System.out.println("Agarro byte "+i+", bit "+j);
                     int[] vals = {i, j};
                     blocks.add(vals);
                     if (blocks.size() == blockQuantity) {
@@ -142,10 +142,7 @@ public class EXT2OS2 {
                         break;
                     }
                 }
-                
             }
-            
-            
         }
         System.out.println("Termino de buscar bloques");
         if (blocks.size() < blockQuantity) {
@@ -173,7 +170,7 @@ public class EXT2OS2 {
         if (size == 0) {
             int[] index = buscarInodoVacio();
             if (index[0] != -1) {
-                int posicion = ((index[0] * 8) + (7-index[1])) * 128 + offset_tablainodos;; //Posicion del inodo en la tabla de inodos
+                int posicion = ((index[0] * 8) + (7-index[1])) * 128 + offset_tablainodos; //Posicion del inodo en la tabla de inodos
                 System.out.println("Posicion de inodo: "+posicion);
                 fileSystem.seek(posicion);
                 Inode inodo = new Inode();
@@ -184,7 +181,7 @@ public class EXT2OS2 {
                 fileSystem.writeInt(size);                
                 fileSystem.writeInt(0);
                 fileSystem.writeInt(1);
-                fileSystem.writeInt((blocks.get(0)[0]*8+blocks.get(0)[1])*clusterSize);
+                fileSystem.writeInt((blocks.get(0)[0]*8+(7-blocks.get(0)[1]))*clusterSize + offset_iniciodatos);
                 for (int i = 1; i < 13; i++) {
                     fileSystem.writeInt(0);
                 }
@@ -205,7 +202,7 @@ public class EXT2OS2 {
                 inodo.setI_size(size);
                 int[] punteros = new int[blocks.size()];
                 for (int i = 0; i < blocks.size(); i++) {
-                    punteros[i] = (index[0] * 8 + index[1]) * clusterSize;
+                    punteros[i] = (index[0] * 8 +(7-index[1])) * clusterSize + offset_iniciodatos;
                 }
                 inodo.setI_block(punteros);
                 //Escritura del Inodo en la tabla de inodos
@@ -238,23 +235,24 @@ public class EXT2OS2 {
     public static void escribirData(ArrayList<int[]> blocks, String data) throws IOException {
         int posicion;
         System.out.println("blocks size: " +blocks.size());
+        System.out.println("Data a escribir: "+data);
         for (int i = 0; i < blocks.size(); i++) {
-            posicion = (blocks.get(i)[0] * 8 + blocks.get(i)[1]) * 4096;
+            posicion = (blocks.get(i)[0] * 8 + (7-blocks.get(i)[1])) * clusterSize;
+            System.out.println("Data escrita a bloque "+posicion);
             fileSystem.seek(posicion);
-            if (data.length() >= 2048) {
-                String output = data.substring(0, 2048);
-                data = data.substring(2048, data.length());
+            if (data.length() >= 4096) {
+                String output = data.substring(0, 4096);
+                data = data.substring(4096, data.length());
                 for (int j = 0; j < output.length(); j++) {
                     fileSystem.writeChar(output.charAt(j));
                 }
             } else {
                 for (int j = 0; j < data.length(); j++) {
+                    System.out.println("Caracter a escribir: "+data.charAt(j));
                     fileSystem.writeChar(data.charAt(j));
                 }
             }
         }
-        System.out.println("Terminó de escribir datos");
-
     }
     
     public static void escribirEntradaDirectorio(ArrayList<int[]> blocks, String filename, int inodo) {
@@ -271,25 +269,24 @@ public class EXT2OS2 {
             int direntries = 0;
             while(true){
                 if(direntries < 4096){
+                    
+//                    fileSystem.seek(directorioCd.peek() + direntries);
                     reclen = fileSystem.readInt();
-                    inode = fileSystem.readInt();
                     
                     if(reclen == 0){
-                        fileSystem.seek(fileSystem.getFilePointer() - 8);
-                        fileSystem.writeInt(rec_len);
-
+                        long posactual = fileSystem.getFilePointer() - 4;
+                        fileSystem.seek(posactual);
+                        fileSystem.writeInt(rec_len+1);
                         fileSystem.writeInt(inodo);
                         int l = filename.getBytes("UTF-8").length;
                         fileSystem.writeInt(l);
-                        fileSystem.writeChars(filename);
+                        fileSystem.writeUTF(filename);
                         break;
                     }else{
-//                        System.out.println("RECLEN: "+reclen);
-                        direntries += reclen;
+                        direntries += reclen + 1;
+                        inode = fileSystem.readInt();
                         int length = fileSystem.readInt();
-                        for (int i = 0; i < length; i++) {
-                            fileSystem.readChar();
-                        }
+                        String asd = fileSystem.readUTF();
 //                        fileSystem.seek(fileSystem.getFilePointer() + reclen - 8);
                         
                     }
@@ -349,11 +346,9 @@ public class EXT2OS2 {
             //Escribe el texto que se le agregue hasta encontrar ::q
             //--Crea el nuevo archivo en la entrada de directorio
             //--Escribir los datos del archivo
-            System.out.println(command[0] + " " + command[1] + " " + command[2]);
         } else {
             fileSystem.seek(directorioCd.peek());
             int reclen;
-            String names = "";
             while(true) {
                 reclen = fileSystem.readInt();
                 if(reclen == 0){
@@ -361,48 +356,44 @@ public class EXT2OS2 {
                 }else{
                     int inodo = fileSystem.readInt();
                     int l = fileSystem.readInt();
-                    String name = "";
-                    for (int i = 0; i < l; i++) {
-                        name += fileSystem.readChar();
-                    }
+                    String name = fileSystem.readUTF();
                     if(name.equals(command[1])){
                         fileSystem.seek(inodo);
-                        fileSystem.readInt();
+                        fileSystem.readInt(); //mode
                         int size = fileSystem.readInt();
-                        fileSystem.readInt();
+                        fileSystem.readInt(); //links
                         int blocks = fileSystem.readInt();
                         long currDir = fileSystem.getFilePointer();
+                        
                         String text = "";
                         for (int i = 0; i < blocks; i++) {
                             int ptr = fileSystem.readInt();
                             currDir += 4;
                             fileSystem.seek(ptr);
-                            for (int j = 0; j < 10; j++) {
-                                if(size > 4096){
-                                    for (int k = 0; k < 4096; k++) {
-                                        text += fileSystem.readChar();
-                                    }
-                                    size-=4096;
-                                }else{
-                                    for (int k = 0; k < size; k++) {
-                                        text+= fileSystem.readChar();
-                                    }
-                                    size = 0;
+                            if(size > 4096){
+                                for (int k = 0; k < 4096; k++) {
+                                    text += fileSystem.readChar();
                                 }
-                                
+                                size-=4096;
                                 fileSystem.seek(currDir);
+                            }else{
+                                for (int k = 0; k < size; k++) {
+                                    text+= fileSystem.readChar();
+                                }
+                                size = 0;
+                                fileSystem.seek(currDir);
+                                break;
                             }
                         }
                         fileSystem.seek(directorioCd.peek());
                         System.out.println(text);
-                        
+                        break;
                     }
                 }
 
         }
             //imprime el contenido de un archivo
             //--Entra al inodo del archivo y retorna lo que hay en los bloques del inodo
-            System.out.println(command[0] + " " + command[1]);
         }
     }
     
@@ -421,10 +412,7 @@ public class EXT2OS2 {
             }else{
                 int inodo = fileSystem.readInt();
                 int l = fileSystem.readInt();
-                String name = "";
-                for (int i = 0; i < l; i++) {
-                    name += fileSystem.readChar();
-                }
+                String name = fileSystem.readUTF();
                 System.out.println(name+", inodo: "+inodo);
             }
             
@@ -462,6 +450,10 @@ public class EXT2OS2 {
             if(command[1].equals("..")){
                 directorioCd.pop();
                 fileSystem.seek(directorioCd.peek());
+                int index = route.lastIndexOf('/');
+                route = route.substring(0, index);
+                index = route.lastIndexOf('/');
+                route = route.substring(0, index+1);
             }else{
                 fileSystem.seek(directorioCd.peek());
                 int reclen;
@@ -472,10 +464,7 @@ public class EXT2OS2 {
                     }else{
                         int inodo = fileSystem.readInt();
                         int l = fileSystem.readInt();
-                        String name = "";
-                        for (int i = 0; i < l; i++) {
-                            name += fileSystem.readChar();
-                        }
+                        String name = fileSystem.readUTF();
                         if(name.equals(command[1])){
                             fileSystem.seek(inodo);
                             for (int i = 0; i < 4; i++) {
