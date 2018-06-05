@@ -297,16 +297,21 @@ public class EXT2OS2 {
     }
     
     public static void cat(String[] command) throws IOException {
+        
         if (command[1].equals(">")) {
-            Scanner scanner = new Scanner(System.in);
-            String text = "";
-            String linea = "";
-            System.out.print(">");
-            while(!(linea = scanner.nextLine()).equals("::q")){
+            if(command[2].length()>255){
+                System.err.println("Error el nombre del archivo no puede ser mayor que 255 caracteres.");
+            }else{
+                Scanner scanner = new Scanner(System.in);
+                String text = "";
+                String linea = "";
                 System.out.print(">");
-                text+= linea+"\n";
+                while(!(linea = scanner.nextLine()).equals("::q")){
+                    System.out.print(">");
+                    text+= linea+"\n";
+                }
+                buscarBloquesVaciosFile(text, command[2]);
             }
-            buscarBloquesVaciosFile(text, command[2]);
             //Escribe el texto que se le agregue hasta encontrar ::q
             //--Crea el nuevo archivo en la entrada de directorio
             //--Escribir los datos del archivo
@@ -397,8 +402,11 @@ public class EXT2OS2 {
     public static void mkdir(String[] command) throws IOException {
         //crea una nueva entrada de directorio en el directorio actual
         System.out.println(command[0] + " " + command[1]);
-        buscarBloquesVaciosDir(command[1]);
-        
+        if(command[1].length()>255){
+            System.err.println("Error el nombre del archivo no puede ser mayor que 255 caracteres.");
+        }else{
+             buscarBloquesVaciosDir(command[1]);
+        }
     }
     
     public static void rmdir(String[] command) {
