@@ -10,6 +10,7 @@ package ext2.os2;
  * @author juany
  */
 public class directoryEntry {
+    int reclen;
     int inodeIndex;
     int nameLength;
     String nombre;
@@ -17,7 +18,8 @@ public class directoryEntry {
     public directoryEntry() {
     }
 
-    public directoryEntry(int inodeIndex, int nameLength, String nombre) {
+    public directoryEntry(int reclen, int inodeIndex, int nameLength, String nombre) {
+        this.reclen = reclen;
         this.inodeIndex = inodeIndex;
         this.nameLength = nameLength;
         this.nombre = nombre;
@@ -47,6 +49,9 @@ public class directoryEntry {
         this.nombre = nombre;
     }
     
+    public int getReclen(){
+        return this.reclen;
+    }
     
     
 }

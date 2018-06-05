@@ -36,10 +36,6 @@ public class EXT2OS2 {
         
         directorioCd.push(offset_iniciodatos);
         
-        byte test = 9; //00001001
-        System.out.println("Binary string: "+Integer.toBinaryString(test));
-        System.out.println("Right shift 3rd bit: "+Integer.toBinaryString((test >> 2)));
-        System.out.println("AND first and second strings: "+Integer.toBinaryString(1 & (test >> 2)));
         try {
             fileSystem = new RandomAccessFile("fileSystem", "rw");
 //            fileSystem.seek(directorioCd.peek());
@@ -64,6 +60,9 @@ public class EXT2OS2 {
                     rm(partes);
                 } else if (partes[0].equals("cd")) {
                     cd(partes);
+                } else if(partes[0].equals("exit")){
+                    System.out.println("Adios! =)");
+                    System.exit(0);
                 } else {
                     System.out.println("Command not found");
                 }
@@ -80,9 +79,12 @@ public class EXT2OS2 {
             if (currByte < 255) {
                 for (int j = 7; j >= 0; j--) {
                     if (((currByte >> j) & 1) == 0) {
-                        System.out.println("Agarro inodo vacio byte "+i+", bit "+j);
                         fileSystem.seek(offset_bitmapinodos + i);
+                                    System.out.println("Byte antes de  << :"+ Integer.toBinaryString(currByte));
+
                         currByte |= (1 << j);
+                                    System.out.println("Byte despues de  << :"+ Integer.toBinaryString(currByte));
+
                         fileSystem.writeByte(currByte);
                         int[] retVal = {i, j};
                         return retVal;
@@ -128,13 +130,11 @@ public class EXT2OS2 {
         blockQuantity += 1;
         fileSystem.seek(offset_bitmapdatos);
         ArrayList<int[]> blocks = new ArrayList();  
-        System.out.println("Comenzó a buscar en bitmap datos");
         for (int i = 0; i < offset_bitmapinodos; i++) {
             byte currByte =(byte) fileSystem.readUnsignedByte();
             for (int j = 7; j >= 0; j--) {
                 //11110000
                 if (((currByte >> j) & 1) == 0) {
-                    System.out.println("Agarro byte "+i+", bit "+j);
                     int[] vals = {i, j};
                     blocks.add(vals);
                     if (blocks.size() == blockQuantity) {
@@ -144,7 +144,6 @@ public class EXT2OS2 {
                 }
             }
         }
-        System.out.println("Termino de buscar bloques");
         if (blocks.size() < blockQuantity) {
             System.err.println("no hay suficientes bloques");
         } else {
@@ -155,7 +154,6 @@ public class EXT2OS2 {
                 fileSystem.seek(blocks.get(i)[0]);
                 fileSystem.writeByte(curr);
             }
-            System.out.println("Terminó de reescribir bits en bitmap datos");
             int inodeForDir = asignarInodo(blocks, data.getBytes("UTF-8").length);
             escribirEntradaDirectorio(blocks, fileName, inodeForDir);
             escribirData(blocks, data);
@@ -177,9 +175,9 @@ public class EXT2OS2 {
                 inodo.setI_size(0);
                 //Escritura del Inodo en la tabla de inodos
                 //mode, size, links_count, blocks, punteros, create, access, modify, delete
-                fileSystem.writeInt(0);
-                fileSystem.writeInt(size);                
-                fileSystem.writeInt(0);
+                fileSystem.writeInt(0); //mode 0 para directorio
+                fileSystem.writeInt(inodo.getI_size());                
+                fileSystem.writeInt(1);
                 fileSystem.writeInt(1);
                 fileSystem.writeInt((blocks.get(0)[0]*8+(7-blocks.get(0)[1]))*clusterSize + offset_iniciodatos);
                 for (int i = 1; i < 13; i++) {
@@ -248,7 +246,6 @@ public class EXT2OS2 {
                 }
             } else {
                 for (int j = 0; j < data.length(); j++) {
-                    System.out.println("Caracter a escribir: "+data.charAt(j));
                     fileSystem.writeChar(data.charAt(j));
                 }
             }
@@ -287,45 +284,12 @@ public class EXT2OS2 {
                         inode = fileSystem.readInt();
                         int length = fileSystem.readInt();
                         String asd = fileSystem.readUTF();
-//                        fileSystem.seek(fileSystem.getFilePointer() + reclen - 8);
-                        
                     }
                 }else{
                     System.out.println("Ya no hay espacio para entradas de directorios en este directorio");
                     break;
                 }
             }
-//        for (int i = 0; i < 4096; i++) {
-//            num = fileSystem.readInt();
-//            if(num == 0){
-//                fileSystem.seek(fileSystem.getFilePointer()-4);
-//                fileSystem.writeInt(rec_len);
-//                fileSystem.writeInt(inodo);
-//                fileSystem.writeInt(data.length()*2);
-//                fileSystem.writeUTF(data);
-//            }else{
-//                fileSystem.seek(fileSystem.getFilePointer()-4);
-//                while(true){
-//                    
-//                    int size = fileSystem.readInt();
-//                    System.out.println("Size: "+size);
-//                    int inode = fileSystem.readInt();
-//                    System.out.println("Inodo: "+inode);
-//                    if ( inode == 0  ){
-//                        fileSystem.seek(fileSystem.getFilePointer() - 8);
-//                        fileSystem.writeInt(rec_len);
-//                        fileSystem.writeInt(inodo);
-//                        fileSystem.writeInt(data.length()*2);
-//                        fileSystem.writeUTF(data);
-//                        i = 4096;
-//                        break;
-//                    }else{
-//                        fileSystem.readInt();
-//                        fileSystem.readUTF();
-//                    }
-//                }
-//            }
-//        }
         }catch(IOException ioex){
             System.out.println("Error en escribir entrada dir");
             ioex.printStackTrace();
@@ -405,13 +369,18 @@ public class EXT2OS2 {
         fileSystem.seek(directorioCd.peek());
         int reclen;
         String names = "";
+        int inodo;
+        int l;
         while(true) {
             reclen = fileSystem.readInt();
             if(reclen == 0){
+                inodo = fileSystem.readInt();
+                l = fileSystem.readInt();
+                String name = fileSystem.readUTF();
                 break;
             }else{
-                int inodo = fileSystem.readInt();
-                int l = fileSystem.readInt();
+                inodo = fileSystem.readInt();
+                l = fileSystem.readInt();
                 String name = fileSystem.readUTF();
                 System.out.println(name+", inodo: "+inodo);
             }
@@ -440,7 +409,120 @@ public class EXT2OS2 {
     public static void rm(String[] command) {
         //escribe 0 en los bloques utilizados, del bitmap
         //lo elimina de la entrada de directorio
-        System.out.println(command[0] + " " + command[1]);
+        try{
+            fileSystem.seek(directorioCd.peek());
+            int reclen;
+            String names = "";
+            int nDir = 0;
+            int dirToDelete = -1;
+            int inodeToFree = -1;
+            while(true) {
+
+                reclen = fileSystem.readInt();
+                if(reclen == 0){
+                    break;
+                }else{
+                    nDir++;
+                    int inodo = fileSystem.readInt();
+                    int l = fileSystem.readInt();
+                    String name = fileSystem.readUTF();
+                    if(name.equals(command[1])){
+                        dirToDelete = nDir;
+                        inodeToFree = inodo;
+//                        long indexdir = fileSystem.getFilePointer() - reclen - 1;
+//                        System.out.println("indexdir: "+indexdir);
+                        fileSystem.seek(directorioCd.peek());
+                        ArrayList<directoryEntry> direntries = new ArrayList();
+                        while(true){
+                            long nextDir = fileSystem.getFilePointer();
+                            int reclenNextDir = fileSystem.readInt();
+
+                            if(reclenNextDir == 0){  
+                                break;
+                            }else{
+                                int inodeNextDir = fileSystem.readInt();
+                                int lengthNextDir = fileSystem.readInt();
+                                String fnNextDir = fileSystem.readUTF();
+                                System.out.println("Filename next dir: "+fnNextDir);
+                                direntries.add(new directoryEntry(reclenNextDir, inodeNextDir, lengthNextDir, fnNextDir));
+                            }
+                        }
+                        fileSystem.seek(directorioCd.peek());
+                        for (int i = 0; i < 4096; i++) {
+                            fileSystem.writeByte(0);
+                        }
+                        fileSystem.seek(directorioCd.peek());
+                        direntries.remove(dirToDelete - 1);
+                        for (int i = 0; i < direntries.size(); i++) {
+                            fileSystem.writeInt(direntries.get(i).getReclen());
+                            fileSystem.writeInt(direntries.get(i).getInodeIndex());
+                            fileSystem.writeInt(direntries.get(i).getNameLength());
+                            fileSystem.writeUTF(direntries.get(i).getNombre());
+                        }
+                        freeInode(inodeToFree);
+                        fileSystem.seek(directorioCd.peek());
+                        break;
+                    }
+                }
+
+            }
+            fileSystem.seek(directorioCd.peek());
+        }catch(IOException ioex){
+            System.err.println("Error en rm");
+            ioex.printStackTrace();
+        }
+    }
+    
+    public static void freeInode(int inode){
+        try{
+            fileSystem.seek(inode);
+            for (int i = 0; i < 4; i++) {
+                fileSystem.readInt();
+            }
+            for (int i = 0; i < 13; i++) {
+                int block = fileSystem.readInt();
+                if(block != 0){
+                    freeBlock(block);
+                }
+            }
+            int inodeNumber = (inode - offset_tablainodos)/128;
+            int[] inodebmindex = new int[2];
+            inodebmindex[0] = (int)Math.floor(inodeNumber/8);
+            inodebmindex[1] = 7- inodeNumber%8 ;
+            System.out.println("Inodo a liberar - byte "+inodebmindex[0]+", bit "+inodebmindex[1]);
+            int test = ((inodebmindex[0] * 8) + (inodebmindex[1])) * 128 + offset_tablainodos;
+            if(test == inode){
+                System.out.println("SIMON");
+            }else{
+                System.out.println("NELES");
+            }
+            fileSystem.seek(offset_bitmapinodos + inodebmindex[0]);
+            byte currByte = (byte) fileSystem.readUnsignedByte();
+            System.out.println("Byte antes de  << :"+ Integer.toBinaryString(currByte));
+            currByte ^= 1 << inodebmindex[1];
+            
+            System.out.println("Byte despues de << :"+ Integer.toBinaryString(currByte));
+            fileSystem.seek(offset_bitmapinodos + inodebmindex[0]);
+            fileSystem.writeByte(currByte);
+        }catch(IOException ioex){
+            System.err.println("Error en free inode");
+            ioex.printStackTrace();
+        }
+    }
+    
+    public static void freeBlock(int block){
+        try{
+            int blockNumber = block/4096;
+            int[] blockbmindex = {(int)Math.floor(blockNumber/8), blockNumber%8};
+            fileSystem.seek(offset_bitmapinodos + blockbmindex[0]);
+            byte currByte = (byte) fileSystem.readUnsignedByte();
+            currByte |= (0 << blockbmindex[1]);
+            fileSystem.seek(fileSystem.getFilePointer() - 1);
+            fileSystem.writeByte(currByte);
+        }catch(IOException ioex){
+            System.err.println("Error en free block, liberando bloque "+block);
+            ioex.printStackTrace();
+        }
     }
     
     public static void cd(String[] command) {
@@ -484,95 +566,4 @@ public class EXT2OS2 {
             ioex.printStackTrace();
         }
     }
-
-//        String file = "./boot.start";
-//        writeStructure(file);
-//        int menu = 1;
-//        Scanner sc = new Scanner(System.in);
-//        String nombre;
-//        String texto;
-//        while(menu != 3){
-//            System.out.println("1. Crear nuevo archivo:");
-//            System.out.println("2. Crear nuevo directorio:");
-//            System.out.println("3. Salir");
-//            menu = sc.nextInt();
-//            if(menu==1){
-//                DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
-//                Date date = new Date();
-//                System.out.println(); //2016/11/16 12:08:43
-//                System.out.println("Ingresar Nombre del archivo");
-//                nombre = sc.next();
-//                System.out.println("Ingresar texto");
-//                texto = sc.next();
-//                int i_size = texto.length()*2;
-//                char[] i_ctime = (dateFormat.format(date)).toCharArray();;
-//                char[] i_blocks = new char[4];
-//                int[] i_block = new int[15];
-//                Inode inodo = createInode(i_size, i_ctime ,i_blocks,i_block);
-//                writeTextandInode(file, " ", inodo, texto);
-//                
-//            }else if(menu==2){
-//                System.out.println("Ingresar Nombre del directorio");
-//                nombre = sc.next();
-//            }
-//        }
 }
-
-//    public static void writeStructure(String file){
-//        boolean [] inodeBitmap = new boolean[1024];
-//        boolean [] blockBitmap = new boolean[262144];
-//        for (int i = 0; i < inodeBitmap.length; i++) {
-//            inodeBitmap[i] = false;
-//        }
-//        for (int i = 0; i < blockBitmap.length; i++) {
-//            inodeBitmap[i] = false;
-//        }
-//        Inode [] inodeTable = new Inode[1024];
-//        directoryEntry [] directoryEntries = new directoryEntry[1024];
-//        try {
-//            DataOutputStream os = new DataOutputStream(new FileOutputStream(file));
-//            for (int i = 0; i < inodeBitmap.length; i++) {
-//                os.writeBoolean(inodeBitmap[i]);
-//            }
-//            for (int i = 0; i < blockBitmap.length; i++) {
-//                os.writeBoolean(inodeBitmap[i]);
-//            }
-//            os.close();
-//        } catch (IOException r) {
-//            System.out.println("IOERROR:  " + r.getMessage() + "\n");
-//        }   
-//    }
-//    
-//    public static void writeTextandInode(String file, String file2, Inode inodo, String texto) {
-//        //revisar los bloques vacios y llenar el tamaño en el bitmap
-//        //revisar los inodos vacios y agregar nuevo inodo a la tabla de inodos
-//        try {
-//            DataOutputStream os = new DataOutputStream(new FileOutputStream(file));
-//            int i_size = inodo.getI_size();
-//            char[] i_blocks = inodo.getI_blocks();
-//            int[] i_block = inodo.getBlock();
-//            char[] i_ctime = inodo.getI_ctime();
-//            for (int i = 0; i < i_ctime.length; i++) {
-//                os.writeChar(i_ctime[i]);
-//            }
-//            os.writeInt(i_size);
-//            for (int i = 0; i < i_blocks.length; i++) {
-//                os.writeChar(i_blocks[i]);
-//            }
-//            for (int i = 0; i < i_block.length; i++) {
-//                os.writeInt(i_block[i]);
-//            }
-//            os.close();
-//        } catch (IOException r) {
-//            System.out.println("IOERROR:  " + r.getMessage() + "\n");
-//        }   
-//    }
-//    
-//    public static Inode createInode(int i_size, char[] i_ctime, char[] i_blocks, int[] block) {
-//        Inode nuevo = new Inode();
-//        nuevo.setI_size(i_size);
-//        nuevo.setI_ctime(i_ctime);
-//        nuevo.setI_blocks(i_blocks);
-//        nuevo.setBlock(block);    
-//        return nuevo;
-//    }
