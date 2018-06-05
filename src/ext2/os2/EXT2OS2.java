@@ -412,6 +412,89 @@ public class EXT2OS2 {
     public static void rmdir(String[] command) {
         
         System.out.println(command[0] + " " + command[1]);
+        try {
+            fileSystem.seek(directorioCd.peek());
+            int reclen;
+            String names = "";
+            int nDir = 0;
+            int dirToDelete = -1;
+            int inodeToFree = -1;
+            boolean borrar = true;
+            while (true) {
+
+                reclen = fileSystem.readInt();
+                if (reclen == 0) {
+                    break;
+                } else {
+                    nDir++;
+                    int inodo = fileSystem.readInt();
+                    int l = fileSystem.readInt();
+                    String name = fileSystem.readUTF();
+                    if (name.equals(command[1])) {
+                        dirToDelete = nDir;
+                        inodeToFree = inodo;
+//                        long indexdir = fileSystem.getFilePointer() - reclen - 1;
+//                        System.out.println("indexdir: "+indexdir);
+                        fileSystem.seek(directorioCd.peek());
+                        ArrayList<directoryEntry> direntries = new ArrayList();
+                        while (true) {
+                            long nextDir = fileSystem.getFilePointer();
+                            int reclenNextDir = fileSystem.readInt();
+
+                            if (reclenNextDir == 0) {
+                                break;
+                            } else {
+                                int inodeNextDir = fileSystem.readInt();
+                                int lengthNextDir = fileSystem.readInt();
+                                String fnNextDir = fileSystem.readUTF();
+                                System.out.println("Filename next dir: " + fnNextDir);
+                                direntries.add(new directoryEntry(reclenNextDir, inodeNextDir, lengthNextDir, fnNextDir));
+                            }
+                        }
+                        System.out.println(direntries.get(dirToDelete-1).getInodeIndex());
+                        fileSystem.seek(direntries.get(dirToDelete-1).getInodeIndex());
+                        for (int i = 0; i < 4; i++) {
+                            fileSystem.readInt();
+                        }
+                        int blockptr = fileSystem.readInt();
+                        fileSystem.seek(blockptr);
+                        
+                        reclen = fileSystem.readInt();
+                        if (reclen != 0) {
+                            borrar = false;
+                            System.err.println("El Directorio tiene elementos, eliminelos primero.");
+                        } 
+
+                        
+
+                        if (borrar) {
+                            fileSystem.seek(directorioCd.peek());
+                            for (int i = 0; i < 4096; i++) {
+                                fileSystem.writeByte(0);
+                            }
+                            fileSystem.seek(directorioCd.peek());
+                            direntries.remove(dirToDelete - 1);
+                            for (int i = 0; i < direntries.size(); i++) {
+                                fileSystem.writeInt(direntries.get(i).getReclen());
+                                fileSystem.writeInt(direntries.get(i).getInodeIndex());
+                                fileSystem.writeInt(direntries.get(i).getNameLength());
+                                fileSystem.writeUTF(direntries.get(i).getNombre());
+                            }
+                            freeInode(inodeToFree);
+                            System.err.println("El Directorio ha sido borrado.");
+                        }
+
+                        fileSystem.seek(directorioCd.peek());
+                        break;
+                    }
+                }
+
+            }
+            fileSystem.seek(directorioCd.peek());
+        } catch (IOException ioex) {
+            System.err.println("Error en rm");
+            ioex.printStackTrace();
+        }
     }
     
     public static void rm(String[] command) {
